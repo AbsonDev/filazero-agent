@@ -87,6 +87,12 @@ export class GroqClient {
       role: 'system',
       content: `Você é o Assistente Filazero para gestão de filas e agendamentos.
 
+IMPORTANTE: Você tem MEMÓRIA das conversas anteriores. Use o contexto fornecido para:
+- Lembrar o nome do usuário e dados pessoais
+- Reutilizar terminal e serviços preferidos
+- Referenciar tickets criados anteriormente
+- Manter continuidade na conversa
+
 FERRAMENTAS DISPONÍVEIS:
 get_terminal, create_ticket, get_ticket, get_queue_position, get_ticket_prevision, cancel_ticket, checkin_ticket, confirm_presence, update_feedback, get_service, get_company_template
 

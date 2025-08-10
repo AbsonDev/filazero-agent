@@ -15,6 +15,7 @@ import {
   GroqMessage,
   AgentContext 
 } from '../types/agent.types.js';
+import { sessionStore } from '../services/session-store.js';
 
 export class AgentService {
   private groqClient: GroqClient;
@@ -34,9 +35,16 @@ export class AgentService {
     try {
       const sessionId = request.sessionId || uuidv4();
       
-      // Obter ou criar sessão
+      // Obter ou criar sessão com memória persistente
+      const enhancedSession = sessionStore.getOrCreateSession(sessionId);
       const session = this.getOrCreateSession(sessionId);
       const context = this.getOrCreateContext(sessionId);
+      
+      // Incrementar contador de interações
+      sessionStore.incrementInteractionCount(sessionId);
+      
+      // Extrair informações do usuário da mensagem
+      this.extractUserDataFromMessage(sessionId, request.message);
 
       // Adicionar mensagem do usuário
       const userMessage: ChatMessage = {
@@ -46,8 +54,15 @@ export class AgentService {
       };
       session.messages.push(userMessage);
 
-      // Converter mensagens para formato Groq
+      // Converter mensagens para formato Groq com contexto enriquecido
       const groqMessages = this.convertToGroqMessages(session);
+      
+      // Adicionar contexto da sessão se houver
+      const enrichedContext = sessionStore.getEnrichedContext(sessionId);
+      if (enrichedContext && groqMessages.length > 0) {
+        // Adicionar contexto ao prompt do sistema
+        groqMessages[0].content += enrichedContext;
+      }
 
       // Primeira chamada ao Groq (pode incluir tool calls)
       console.log('🤖 Processando mensagem com Groq...');
@@ -93,6 +108,9 @@ export class AgentService {
 
             // Atualizar contexto baseado no resultado
             this.updateContext(context, toolCall.name, toolResult);
+            
+            // Salvar informações relevantes na memória persistente
+            this.updatePersistentMemory(sessionId, toolCall.name, toolResult);
 
             // Adicionar resultado da ferramenta às mensagens
             const toolMessage = this.groqClient.createToolMessage(
@@ -319,7 +337,94 @@ export class AgentService {
       console.log(`🧹 Limpeza: ${cleaned} sessões antigas removidas`);
     }
 
+    // Também limpar sessões persistentes antigas
+    sessionStore.cleanupOldSessions();
+
     return cleaned;
+  }
+
+  /**
+   * Extrai dados do usuário da mensagem
+   */
+  private extractUserDataFromMessage(sessionId: string, message: string) {
+    const userData: any = {};
+    
+    // Extrair nome (padrões comuns)
+    const namePatterns = [
+      /(?:meu nome é|me chamo|sou o?a?)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/i,
+      /para\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*),?\s+(?:telefone|email|fisio|dent)/i,
+      /ticket\s+para\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/i
+    ];
+    
+    for (const pattern of namePatterns) {
+      const match = message.match(pattern);
+      if (match && match[1]) {
+        userData.name = match[1].trim();
+        break;
+      }
+    }
+    
+    // Extrair telefone
+    const phonePattern = /(?:telefone|tel|fone|celular|cel)[\s:]*([0-9\s\-\(\)]+)/i;
+    const phoneMatch = message.match(phonePattern);
+    if (phoneMatch && phoneMatch[1]) {
+      userData.phone = phoneMatch[1].replace(/\D/g, '');
+    }
+    
+    // Extrair email
+    const emailPattern = /(?:email|e-mail)[\s:]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i;
+    const emailMatch = message.match(emailPattern);
+    if (emailMatch && emailMatch[1]) {
+      userData.email = emailMatch[1].toLowerCase();
+    }
+    
+    // Extrair serviço preferido
+    const services = ['fisioterapia', 'dentista', 'tomografia', 'acupuntura', 'enfermagem', 'raio-x'];
+    for (const service of services) {
+      if (message.toLowerCase().includes(service)) {
+        userData.preferredService = service.toUpperCase();
+        break;
+      }
+    }
+    
+    // Atualizar se encontrou alguma informação
+    if (Object.keys(userData).length > 0) {
+      sessionStore.updateUserData(sessionId, userData);
+      console.log(`📝 Dados extraídos da mensagem:`, userData);
+    }
+  }
+
+  /**
+   * Atualiza memória persistente com resultados das ferramentas
+   */
+  private updatePersistentMemory(sessionId: string, toolName: string, result: any) {
+    switch (toolName) {
+      case 'get_terminal':
+        if (result && result.provider && result.location) {
+          // Salvar terminal usado como padrão
+          const accessKey = result.publicAccessKey || result.accessKey || '1d1373dcf045408aa3b13914f2ac1076';
+          sessionStore.setDefaultTerminal(sessionId, {
+            accessKey,
+            providerId: result.provider.id,
+            locationId: result.location.id
+          });
+        }
+        break;
+        
+      case 'create_ticket':
+        if (result && result.responseData) {
+          const tickets = result.responseData.tickets || [];
+          if (tickets.length > 0) {
+            // Salvar ticket criado no histórico
+            sessionStore.addCreatedTicket(sessionId, {
+              id: tickets[0],
+              smartCode: result.responseData.smartCode || '',
+              service: 'FISIOTERAPIA' // TODO: Obter do contexto
+            });
+          }
+        }
+        break;
+    }
   }
 
   /**

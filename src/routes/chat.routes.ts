@@ -5,6 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { AgentService } from '../agent/agent.service.js';
 import { ChatRequest } from '../types/agent.types.js';
+import { sessionStore } from '../services/session-store.js';
 
 const router = Router();
 const agentService = new AgentService();
@@ -198,14 +199,44 @@ router.post('/cleanup', async (req: Request, res: Response) => {
 router.get('/stats', async (req: Request, res: Response) => {
   try {
     const stats = agentService.getStats();
+    const memoryStats = sessionStore.getStats();
     
     res.json({
       ...stats,
+      memory: memoryStats,
       timestamp: new Date().toISOString()
     });
 
   } catch (error: any) {
     console.error('❌ Erro ao obter estatísticas:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/memory/:sessionId - Obtém memória persistente de uma sessão
+ */
+router.get('/memory/:sessionId', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { sessionId } = req.params;
+    
+    const session = sessionStore.getOrCreateSession(sessionId);
+    const enrichedContext = sessionStore.getEnrichedContext(sessionId);
+    
+    res.json({
+      sessionId: session.id,
+      userData: session.userData || {},
+      ticketsCreated: session.ticketsCreated,
+      defaultTerminal: session.defaultTerminal,
+      interactionCount: session.interactionCount,
+      previousSummary: session.previousSummary,
+      enrichedContext,
+      lastActivity: session.lastActivity,
+      createdAt: session.createdAt
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro ao obter memória:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -221,9 +252,10 @@ router.get('/', (req: Request, res: Response) => {
     endpoints: {
       'POST /api/chat': 'Enviar mensagem para o agente',
       'GET /api/health': 'Status de saúde do agente',
-      'GET /api/stats': 'Estatísticas do agente',
+      'GET /api/stats': 'Estatísticas do agente (incluindo memória)',
       'GET /api/sessions': 'Listar sessões ativas',
       'GET /api/session/:id': 'Informações de uma sessão',
+      'GET /api/memory/:id': 'Memória persistente de uma sessão',
       'DELETE /api/session/:id': 'Remover sessão',
       'POST /api/cleanup': 'Limpar sessões antigas'
     },
