@@ -263,6 +263,44 @@ export const filazeroTools: GroqFunction[] = [
         required: ['slug']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'collect_system_info',
+      description: 'Coleta informações básicas do sistema operacional, usuário e ambiente',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'setup_monitoring_services',
+      description: 'Configura quais serviços do Filazero devem ser monitorados na sessão',
+      parameters: {
+        type: 'object',
+        properties: {
+          services: {
+            type: 'object',
+            description: 'Serviços a serem monitorados',
+            properties: {
+              tickets: { type: 'boolean', description: 'Monitorar tickets' },
+              terminals: { type: 'boolean', description: 'Monitorar terminais' },
+              queues: { type: 'boolean', description: 'Monitorar filas' },
+              providers: { type: 'boolean', description: 'Monitorar provedores' },
+              sessions: { type: 'boolean', description: 'Monitorar sessões' },
+              customers: { type: 'boolean', description: 'Monitorar clientes' },
+              reports: { type: 'boolean', description: 'Monitorar relatórios' }
+            }
+          }
+        },
+        required: ['services']
+      }
+    }
   }
 ];
 

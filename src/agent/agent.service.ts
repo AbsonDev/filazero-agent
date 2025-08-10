@@ -58,11 +58,21 @@ export class AgentService {
       // Converter mensagens para formato Groq com contexto enriquecido
       const groqMessages = this.convertToGroqMessages(session);
       
+      // Verificar se a sessão precisa de setup inicial
+      const isSetupComplete = sessionStore.isSessionConfigured(sessionId);
+      const sessionConfig = sessionStore.getSessionConfiguration(sessionId);
+      
       // Adicionar contexto da sessão se houver
       const enrichedContext = sessionStore.getEnrichedContext(sessionId);
       if (enrichedContext && groqMessages.length > 0) {
         // Adicionar contexto ao prompt do sistema
         groqMessages[0].content += enrichedContext;
+      }
+
+      // Adicionar contexto de setup se necessário
+      if (!isSetupComplete && groqMessages.length > 0) {
+        const setupContext = this.generateSetupContext(sessionConfig);
+        groqMessages[0].content += setupContext;
       }
 
       // Primeira chamada ao Groq (pode incluir tool calls)
@@ -99,11 +109,18 @@ export class AgentService {
           try {
             console.log(`🔧 Executando: ${toolCall.name}`);
             
-            // Preparar argumentos com valores padrão se necessário
-            const args = this.prepareToolArguments(toolCall.name, toolCall.arguments);
+            let toolResult: any;
             
-            // Chamar ferramenta MCP
-            const toolResult = await this.mcpClient.callTool(toolCall.name, args);
+            // Verificar se é uma função local (setup) ou MCP
+            if (toolCall.name === 'collect_system_info' || toolCall.name === 'setup_monitoring_services') {
+              toolResult = await this.executeLocalTool(sessionId, toolCall.name, toolCall.arguments);
+            } else {
+              // Preparar argumentos com valores padrão se necessário
+              const args = this.prepareToolArguments(toolCall.name, toolCall.arguments);
+              
+              // Chamar ferramenta MCP
+              toolResult = await this.mcpClient.callTool(toolCall.name, args);
+            }
             
             toolsUsed.push(toolCall.name);
 
@@ -510,5 +527,168 @@ export class AgentService {
     }
 
     return sanitized;
+  }
+
+  /**
+   * Executa ferramentas locais (setup da sessão)
+   */
+  private async executeLocalTool(sessionId: string, toolName: string, args: Record<string, any>): Promise<any> {
+    switch (toolName) {
+      case 'collect_system_info':
+        return this.collectSystemInfo(sessionId);
+        
+      case 'setup_monitoring_services':
+        return this.setupMonitoringServices(sessionId, args.services);
+        
+      default:
+        throw new Error(`Ferramenta local desconhecida: ${toolName}`);
+    }
+  }
+
+  /**
+   * Coleta informações do sistema
+   */
+  private async collectSystemInfo(sessionId: string): Promise<any> {
+    try {
+      const os = await import('os');
+      
+      const systemInfo = {
+        platform: os.platform(),
+        hostname: os.hostname(),
+        username: os.userInfo()?.username || 'unknown',
+        currentDirectory: process.cwd(),
+        sessionStartTime: new Date(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        nodeVersion: process.version,
+        memory: {
+          total: Math.round(os.totalmem() / 1024 / 1024),
+          free: Math.round(os.freemem() / 1024 / 1024)
+        }
+      };
+
+      // Atualizar na sessão
+      sessionStore.updateSystemInfo(sessionId, systemInfo);
+      sessionStore.updateSetupStatus(sessionId, { systemInfoCollected: true });
+
+      return {
+        success: true,
+        message: 'Informações do sistema coletadas com sucesso',
+        data: {
+          platform: systemInfo.platform,
+          user: systemInfo.username,
+          directory: systemInfo.currentDirectory,
+          timezone: systemInfo.timezone
+        }
+      };
+
+    } catch (error: any) {
+      console.error('❌ Erro ao coletar informações do sistema:', error);
+      return {
+        success: false,
+        message: 'Erro ao coletar informações do sistema',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Gera contexto de setup para orientar o agente
+   */
+  private generateSetupContext(sessionConfig?: any): string {
+    if (!sessionConfig?.setupStatus) {
+      return `
+
+SETUP INICIAL OBRIGATÓRIO:
+Esta é uma nova sessão e você DEVE primeiro configurar o ambiente antes de responder qualquer pergunta do usuário.
+
+SIGA EXATAMENTE ESTES PASSOS:
+
+1. PRIMEIRO: Use a função 'collect_system_info' para coletar informações básicas do sistema
+2. SEGUNDO: Pergunte ao usuário quais serviços do Filazero ele deseja monitorar:
+   - Tickets (senhas de atendimento)
+   - Terminais (pontos de atendimento)
+   - Filas (estado das filas)
+   - Provedores (empresas/órgãos)
+   - Sessões (horários de atendimento)
+   - Clientes (informações de clientes)
+   - Relatórios (estatísticas e dados)
+
+3. TERCEIRO: Após receber a resposta, use 'setup_monitoring_services' com os serviços escolhidos
+
+IMPORTANTE:
+- NÃO responda outras perguntas até completar o setup
+- Seja amigável e explique brevemente o que é cada serviço
+- Apenas após o setup completo você pode ajudar com outras tarefas
+
+`;
+    }
+
+    const status = sessionConfig.setupStatus;
+    
+    if (!status.systemInfoCollected) {
+      return `
+
+SETUP EM ANDAMENTO:
+Você precisa coletar as informações do sistema usando 'collect_system_info' antes de continuar.
+
+`;
+    }
+    
+    if (!status.servicesConfigured) {
+      return `
+
+SETUP EM ANDAMENTO:
+As informações do sistema foram coletadas. Agora você precisa perguntar quais serviços monitorar e usar 'setup_monitoring_services'.
+
+Serviços disponíveis:
+- Tickets, Terminais, Filas, Provedores, Sessões, Clientes, Relatórios
+
+`;
+    }
+
+    return '';
+  }
+
+  /**
+   * Configura os serviços a serem monitorados
+   */
+  private async setupMonitoringServices(sessionId: string, services: Record<string, boolean>): Promise<any> {
+    try {
+      // Atualizar na sessão
+      sessionStore.updateMonitoredServices(sessionId, services);
+      
+      // Verificar se todas as etapas estão completas
+      const session = sessionStore.getOrCreateSession(sessionId);
+      const config = session.configuration;
+      
+      if (config?.setupStatus.servicesConfigured && config?.setupStatus.systemInfoCollected) {
+        sessionStore.updateSetupStatus(sessionId, { 
+          isSetupComplete: true, 
+          currentStep: 'complete' 
+        });
+      }
+
+      const enabledServices = Object.entries(services)
+        .filter(([_, enabled]) => enabled)
+        .map(([service, _]) => service);
+
+      return {
+        success: true,
+        message: 'Serviços de monitoramento configurados com sucesso',
+        data: {
+          enabledServices,
+          totalEnabled: enabledServices.length,
+          setupComplete: config?.setupStatus.isSetupComplete || false
+        }
+      };
+
+    } catch (error: any) {
+      console.error('❌ Erro ao configurar serviços:', error);
+      return {
+        success: false,
+        message: 'Erro ao configurar serviços de monitoramento',
+        error: error.message
+      };
+    }
   }
 }
