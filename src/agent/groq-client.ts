@@ -19,7 +19,7 @@ export class GroqClient {
       apiKey: apiKey,
     });
 
-    this.model = process.env.AGENT_MODEL || 'llama-3.1-8b-instant';
+    this.model = process.env.AGENT_MODEL || 'llama-3.1-70b-versatile';
   }
 
   /**
@@ -42,7 +42,7 @@ export class GroqClient {
         messages,
         model: this.model,
         temperature,
-        max_tokens: 1000,
+        max_tokens: 2000,
       };
 
       // Adicionar tools se fornecidas
@@ -90,21 +90,36 @@ export class GroqClient {
 FERRAMENTAS DISPONÍVEIS:
 get_terminal, create_ticket, get_ticket, get_queue_position, get_ticket_prevision, cancel_ticket, checkin_ticket, confirm_presence, update_feedback, get_service, get_company_template
 
-⚠️ REGRA CRÍTICA PARA CRIAR TICKETS:
-1. SEMPRE use get_terminal PRIMEIRO para obter IDs corretos
-2. NUNCA invente Provider ID (906, 730, etc.), Location ID (0), ou Service ID (2, 123)
-3. USE APENAS os IDs retornados pelo get_terminal
+⚠️ REGRA CRÍTICA - COPY EXATO DO get_terminal:
+1. SEMPRE get_terminal PRIMEIRO
+2. COPIE os valores EXATOS retornados:
+   - pid: result.provider.id (EX: 11)
+   - locationId: result.location.id (EX: 11) 
+   - serviceId: do result.services[].id (EX: 21 para FISIOTERAPIA)
+   - terminalSchedule.sessionId: result.services[0].sessions[0].id (EX: 2056332)
+   - terminalSchedule.publicAccessKey: accessKey original (EX: "1d1373dcf045408aa3b13914f2ac1076")
 
-FLUXO OBRIGATÓRIO:
-Usuário quer criar ticket → get_terminal(accessKey) → obter pid, locationId, serviceId corretos → create_ticket com IDs reais
+EXEMPLO REAL:
+get_terminal retorna: provider.id=11, location.id=11, services[0].id=21
+create_ticket DEVE usar: pid=11, locationId=11, serviceId=21
 
-ESTRUTURA create_ticket:
-- terminalSchedule: do get_terminal (sessionId, publicAccessKey)
-- pid: do get_terminal 
-- locationId: do get_terminal
-- serviceId: do get_terminal (buscar na lista de services)
-- customer: { name, phone, email }
-- browserUuid: auto-gerado
+NUNCA USE: pid=906, locationId=0, serviceId=2, sessionId=123, publicAccessKey="ABC123"
+
+EXEMPLO COMPLETO:
+get_terminal("1d1373dcf045408aa3b13914f2ac1076") retorna:
+{
+  "provider": {"id": 11},
+  "location": {"id": 11}, 
+  "services": [{"id": 21, "name": "FISIOTERAPIA", "sessions": [{"id": 2056332}]}]
+}
+
+create_ticket DEVE usar EXATAMENTE:
+{
+  "pid": 11,
+  "locationId": 11,
+  "serviceId": 21,
+  "terminalSchedule": {"sessionId": 2056332, "publicAccessKey": "1d1373dcf045408aa3b13914f2ac1076"}
+}
 
 INSTRUÇÕES:
 - Responda em português
