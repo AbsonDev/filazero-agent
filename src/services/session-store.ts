@@ -6,6 +6,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ChatSession, AgentContext, FilazeroTicket } from '../types/agent.types.js';
+import { FILAZERO_CONFIG } from '../agent/config.js';
 
 // Estrutura estendida para sessão com memória
 export interface EnhancedChatSession extends ChatSession {
@@ -229,22 +230,21 @@ export class SessionStore {
 
     // Dados do usuário
     if (session.userData) {
-      const { name, phone, email, preferredService } = session.userData;
+      const { name, phone, email } = session.userData;
       if (name) parts.push(`Nome do usuário: ${name}`);
       if (phone) parts.push(`Telefone: ${phone}`);
       if (email) parts.push(`Email: ${email}`);
-      if (preferredService) parts.push(`Serviço preferido: ${preferredService}`);
+      // Sempre usar serviço padrão
+      parts.push(`Serviço: ${FILAZERO_CONFIG.DEFAULT_SERVICE}`);
     }
 
-    // Terminal padrão (não expor chave)
-    if (session.defaultTerminal) {
-      parts.push(`Terminal padrão configurado`);
-    }
+    // Terminal padrão (sempre configurado)
+    parts.push(`Terminal padrão configurado (${FILAZERO_CONFIG.TERMINAL.provider} - ${FILAZERO_CONFIG.TERMINAL.location})`);
 
     // Tickets criados (usar smartCode quando disponível)
     if (session.ticketsCreated.length > 0) {
       const recent = session.ticketsCreated.slice(-3);
-      const rendered = recent.map(t => t.smartCode ? `${t.service} (${t.smartCode})` : `${t.service}`);
+      const rendered = recent.map(t => t.smartCode ? `${FILAZERO_CONFIG.DEFAULT_SERVICE} (${t.smartCode})` : FILAZERO_CONFIG.DEFAULT_SERVICE);
       parts.push(`Atendimentos recentes: ${rendered.join(', ')}`);
     }
 
