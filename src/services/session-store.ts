@@ -236,15 +236,16 @@ export class SessionStore {
       if (preferredService) parts.push(`Serviço preferido: ${preferredService}`);
     }
 
-    // Terminal padrão
+    // Terminal padrão (não expor chave)
     if (session.defaultTerminal) {
-      parts.push(`Terminal usado: ${session.defaultTerminal.accessKey}`);
+      parts.push(`Terminal padrão configurado`);
     }
 
-    // Tickets criados
+    // Tickets criados (usar smartCode quando disponível)
     if (session.ticketsCreated.length > 0) {
       const recent = session.ticketsCreated.slice(-3);
-      parts.push(`Tickets recentes: ${recent.map(t => `#${t.id} (${t.service})`).join(', ')}`);
+      const rendered = recent.map(t => t.smartCode ? `${t.service} (${t.smartCode})` : `${t.service}`);
+      parts.push(`Atendimentos recentes: ${rendered.join(', ')}`);
     }
 
     // Resumo anterior
