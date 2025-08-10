@@ -137,6 +137,9 @@ export class AgentService {
         finalContent = finalGroqResponse.content || 'Desculpe, não consegui processar sua solicitação.';
       }
 
+      // Sanitização final para evitar revelar termos técnicos
+      finalContent = this.sanitizeForPatient(finalContent);
+
       // Criar mensagem do assistente
       const assistantMessage: ChatMessage = {
         role: 'assistant',
@@ -455,5 +458,39 @@ export class AgentService {
       mcpServer: this.mcpClient.getClientInfo(),
       uptime: process.uptime()
     };
+  }
+
+  /**
+   * Sanitiza respostas para o paciente removendo trechos técnicos
+   */
+  private sanitizeForPatient(text: string): string {
+    if (!text) return text;
+
+    // Remover blocos de código e JSON
+    let sanitized = text
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/\{\s*\"?[a-zA-Z_][\s\S]*?\}\s*$/gm, '')
+      .replace(/\[[\s\S]*?\]/g, '');
+
+    // Ocultar termos técnicos específicos
+    const forbiddenTerms = [
+      'pid', 'locationId', 'serviceId', 'sessionId', 'publicAccessKey', 'browserUuid',
+      'providerId', 'ticketId', 'tool', 'get_terminal', 'create_ticket', 'function', 'arguments', 'JSON'
+    ];
+
+    for (const term of forbiddenTerms) {
+      const re = new RegExp(`\\b${term}\\b`, 'gi');
+      sanitized = sanitized.replace(re, '');
+    }
+
+    // Compactar espaços múltiplos gerados pelas remoções
+    sanitized = sanitized.replace(/\n{3,}/g, '\n\n').replace(/\s{2,}/g, ' ').trim();
+
+    // Garantir tom humano curto
+    if (sanitized.length === 0) {
+      sanitized = 'Certo! Vamos continuar. Como posso ajudar no seu agendamento?';
+    }
+
+    return sanitized;
   }
 }
