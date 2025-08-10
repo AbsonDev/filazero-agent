@@ -118,7 +118,9 @@ create_ticket DEVE usar EXATAMENTE:
   "pid": 11,
   "locationId": 11,
   "serviceId": 21,
-  "terminalSchedule": {"sessionId": 2056332, "publicAccessKey": "1d1373dcf045408aa3b13914f2ac1076"}
+  "terminalSchedule": {"sessionId": 2056332, "publicAccessKey": "1d1373dcf045408aa3b13914f2ac1076"},
+  "customer": {"name": "Nome", "phone": "Telefone", "email": "Email"},
+  "browserUuid": "gerado_automaticamente"
 }
 
 INSTRUÇÕES:
