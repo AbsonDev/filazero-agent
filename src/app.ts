@@ -17,7 +17,12 @@ const app = express();
 // Middleware
 app.use(cors({
   origin: NODE_ENV === 'production' ? 
-    ['https://your-frontend-domain.com'] : // Substitua pela URL do seu frontend
+    [
+      'https://fila-chat-bot.vercel.app',
+      'https://filachatbot-git-main-absondevs-projects.vercel.app',
+      'https://filachatbot-absondevs-projects.vercel.app',
+      /^https:\/\/.*\.vercel\.app$/
+    ] : 
     ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
