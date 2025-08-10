@@ -232,11 +232,64 @@ router.get('/memory/:sessionId', async (req: Request, res: Response): Promise<an
       previousSummary: session.previousSummary,
       enrichedContext,
       lastActivity: session.lastActivity,
-      createdAt: session.createdAt
+      createdAt: session.createdAt,
+      configuration: session.configuration
     });
 
   } catch (error: any) {
     console.error('❌ Erro ao obter memória:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/setup/:sessionId - Obtém status de configuração da sessão
+ */
+router.get('/setup/:sessionId', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { sessionId } = req.params;
+    
+    const isConfigured = sessionStore.isSessionConfigured(sessionId);
+    const configuration = sessionStore.getSessionConfiguration(sessionId);
+    
+    res.json({
+      sessionId,
+      isConfigured,
+      configuration: configuration || null,
+      nextStep: !configuration?.setupStatus ? 'collect_system_info' : 
+               !configuration.setupStatus.systemInfoCollected ? 'collect_system_info' :
+               !configuration.setupStatus.servicesConfigured ? 'setup_monitoring_services' :
+               'complete'
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro ao obter status de setup:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/setup/:sessionId/reset - Reseta configuração da sessão
+ */
+router.post('/setup/:sessionId/reset', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { sessionId } = req.params;
+    
+    // Resetar configuração
+    sessionStore.updateSetupStatus(sessionId, {
+      isSetupComplete: false,
+      servicesConfigured: false,
+      systemInfoCollected: false,
+      currentStep: 'initial'
+    });
+    
+    res.json({
+      message: 'Configuração resetada com sucesso',
+      sessionId
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erro ao resetar setup:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -256,6 +309,8 @@ router.get('/', (req: Request, res: Response) => {
       'GET /api/sessions': 'Listar sessões ativas',
       'GET /api/session/:id': 'Informações de uma sessão',
       'GET /api/memory/:id': 'Memória persistente de uma sessão',
+      'GET /api/setup/:id': 'Status de configuração da sessão',
+      'POST /api/setup/:id/reset': 'Resetar configuração da sessão',
       'DELETE /api/session/:id': 'Remover sessão',
       'POST /api/cleanup': 'Limpar sessões antigas'
     },
