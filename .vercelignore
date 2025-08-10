@@ -1,0 +1,21 @@
+# Development files
+*.md
+*.log
+.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+test/
+tests/
+*.test.*
+*.spec.*
+
+# Coverage
+coverage/

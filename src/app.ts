@@ -80,13 +80,8 @@ app.use('*', (req, res) => {
 // Função para inicializar o servidor
 async function startServer() {
   try {
-    // Validar configuração
-    if (!process.env.GROQ_API_KEY) {
-      console.error('❌ ERRO: GROQ_API_KEY não configurada!');
-      console.error('   Obtenha uma chave gratuita em: https://console.groq.com');
-      console.error('   Configure no arquivo .env: GROQ_API_KEY=sua_chave_aqui');
-      process.exit(1);
-    }
+    // Configuração validada no GroqClient - usa chave fixa se necessário
+    console.log('🔑 Groq API Key: ' + (process.env.GROQ_API_KEY ? 'Configurada via .env' : 'Usando chave fixa'));
 
     // Iniciar servidor
     const server = app.listen(PORT, '0.0.0.0', () => {
