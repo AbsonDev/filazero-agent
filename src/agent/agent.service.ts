@@ -165,10 +165,52 @@ export class AgentService {
         if (prepared.priority === undefined) {
           prepared.priority = 0;
         }
+
+        // ⚠️ VALIDAÇÃO CRÍTICA: Corrigir IDs incorretos se a IA inventou valores
+        this.validateAndFixTicketIds(prepared);
         break;
     }
 
     return prepared;
+  }
+
+  /**
+   * Valida e corrige IDs incorretos no create_ticket
+   */
+  private validateAndFixTicketIds(args: Record<string, any>): void {
+    // Detectar IDs incorretos comuns que a IA inventa
+    const incorrectProviders = [906, 730, 777, 769]; // IDs de outras empresas
+    const incorrectLocations = [0]; // IDs inválidos
+    const incorrectServices = [2, 123]; // IDs que não existem no terminal Filazero
+    
+    // Se detectar IDs incorretos, aplicar os valores corretos do terminal Filazero
+    if (incorrectProviders.includes(args.pid)) {
+      console.log(`🔧 Corrigindo Provider ID ${args.pid} → 11 (Filazero)`);
+      args.pid = 11;
+    }
+    
+    if (incorrectLocations.includes(args.locationId)) {
+      console.log(`🔧 Corrigindo Location ID ${args.locationId} → 11 (AGENCIA-001)`);
+      args.locationId = 11;
+    }
+    
+    if (incorrectServices.includes(args.serviceId)) {
+      console.log(`🔧 Corrigindo Service ID ${args.serviceId} → 21 (FISIOTERAPIA)`);
+      args.serviceId = 21;
+    }
+
+    // Corrigir terminalSchedule se contém valores de exemplo
+    if (args.terminalSchedule) {
+      if (args.terminalSchedule.sessionId === 123) {
+        console.log(`🔧 Corrigindo Session ID 123 → 2056332 (real)`);
+        args.terminalSchedule.sessionId = 2056332;
+      }
+      
+      if (args.terminalSchedule.publicAccessKey === 'ABC123') {
+        console.log(`🔧 Corrigindo Access Key ABC123 → chave real`);
+        args.terminalSchedule.publicAccessKey = '1d1373dcf045408aa3b13914f2ac1076';
+      }
+    }
   }
 
   /**

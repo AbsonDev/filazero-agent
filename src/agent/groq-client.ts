@@ -19,7 +19,7 @@ export class GroqClient {
       apiKey: apiKey,
     });
 
-    this.model = process.env.AGENT_MODEL || 'llama-3.1-70b-instant';
+    this.model = process.env.AGENT_MODEL || 'llama-3.1-8b-instant';
   }
 
   /**
