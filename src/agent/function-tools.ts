@@ -2,6 +2,8 @@
  * Definições das ferramentas Filazero como Functions para Groq
  */
 
+import { FILAZERO_CONFIG } from './config.js';
+
 import { GroqFunction } from '../types/agent.types.js';
 
 export const filazeroTools: GroqFunction[] = [
@@ -9,13 +11,13 @@ export const filazeroTools: GroqFunction[] = [
     type: 'function',
     function: {
       name: 'get_terminal',
-      description: 'Busca informações de um terminal Filazero usando a chave de acesso. Retorna dados do terminal, localização, provider e serviços disponíveis.',
+      description: 'Busca informações do terminal Filazero padrão. Use sempre o accessKey padrão.',
       parameters: {
         type: 'object',
         properties: {
           accessKey: {
             type: 'string',
-            description: 'Chave de acesso do terminal (ex: ABC123, 1d1373dcf045408aa3b13914f2ac1076)'
+            description: `Chave de acesso do terminal (padrão: ${FILAZERO_CONFIG.DEFAULT_ACCESS_KEY})`
           }
         },
         required: ['accessKey']
@@ -26,51 +28,51 @@ export const filazeroTools: GroqFunction[] = [
     type: 'function',
     function: {
       name: 'create_ticket',
-      description: 'Cria um novo ticket na fila. Precisa de informações do cliente, terminal e serviço.',
+      description: `Cria um novo ticket de ${FILAZERO_CONFIG.DEFAULT_SERVICE} na fila Filazero. Use valores padrão para agendamento rápido.`,
       parameters: {
         type: 'object',
         properties: {
           terminalSchedule: {
             type: 'object',
-            description: 'Informações da sessão do terminal',
+            description: `Informações da sessão do terminal (padrão: sessionId ${FILAZERO_CONFIG.DEFAULT_SESSION_ID}, accessKey ${FILAZERO_CONFIG.DEFAULT_ACCESS_KEY})`,
             properties: {
-              sessionId: { type: 'number', description: 'ID da sessão' },
-              publicAccessKey: { type: 'string', description: 'Chave pública do terminal' }
+              sessionId: { type: 'number', description: `ID da sessão (padrão: ${FILAZERO_CONFIG.DEFAULT_SESSION_ID})` },
+              publicAccessKey: { type: 'string', description: `Chave pública do terminal (padrão: ${FILAZERO_CONFIG.DEFAULT_ACCESS_KEY})` }
             }
           },
           pid: {
             type: 'number',
-            description: 'ID do provider (11=Filazero, 906=Artesano, 730=Boticário, etc.)'
+            description: `ID do provider (padrão: ${FILAZERO_CONFIG.PROVIDER_ID} = Filazero)`
           },
           locationId: {
             type: 'number',
-            description: 'ID da localização/agência'
+            description: `ID da localização (padrão: ${FILAZERO_CONFIG.LOCATION_ID} = AGENCIA-001)`
           },
           serviceId: {
             type: 'number', 
-            description: 'ID do serviço desejado'
+            description: `ID do serviço (padrão: ${FILAZERO_CONFIG.SERVICE_ID} = ${FILAZERO_CONFIG.DEFAULT_SERVICE})`
           },
           customer: {
             type: 'object',
-            description: 'Dados do cliente',
+            description: 'Dados do cliente (OBRIGATÓRIOS)',
             properties: {
               name: { type: 'string', description: 'Nome completo do cliente' },
-              phone: { type: 'string', description: 'Telefone do cliente' },
+              phone: { type: 'string', description: 'Telefone do cliente com DDD' },
               email: { type: 'string', description: 'Email do cliente' }
             },
             required: ['name', 'phone', 'email']
           },
           browserUuid: {
             type: 'string',
-            description: 'UUID único para identificar a sessão'
+            description: `UUID único para identificar a sessão (padrão: ${FILAZERO_CONFIG.DEFAULT_BROWSER_UUID})`
           },
           priority: {
             type: 'number',
-            description: 'Prioridade do ticket (0-10)',
-            default: 0
+            description: `Prioridade do ticket (padrão: ${FILAZERO_CONFIG.DEFAULT_PRIORITY})`,
+            default: FILAZERO_CONFIG.DEFAULT_PRIORITY
           }
         },
-        required: ['terminalSchedule', 'pid', 'locationId', 'serviceId', 'customer', 'browserUuid']
+        required: ['customer']
       }
     }
   },
@@ -304,12 +306,12 @@ export function generateBrowserUuid(): string {
  */
 export const helpers = {
   /**
-   * Cria terminalSchedule básico
+   * Cria terminalSchedule padrão
    */
-  createTerminalSchedule(sessionId: number, publicAccessKey: string) {
+  createTerminalSchedule() {
     return {
-      sessionId,
-      publicAccessKey
+      sessionId: FILAZERO_CONFIG.DEFAULT_SESSION_ID,
+      publicAccessKey: FILAZERO_CONFIG.DEFAULT_ACCESS_KEY
     };
   },
 
@@ -321,13 +323,26 @@ export const helpers = {
   },
 
   /**
-   * IDs de providers comuns
+   * Cria ticket padrão com valores pré-configurados
    */
-  providers: {
-    filazero: 11,
-    artesano: 906,
-    boticario: 730,
-    nike: 769,
-    noel: 777
+  createDefaultTicket(customer: { name: string; phone: string; email: string }) {
+    return {
+      terminalSchedule: this.createTerminalSchedule(),
+      pid: FILAZERO_CONFIG.PROVIDER_ID,
+      locationId: FILAZERO_CONFIG.LOCATION_ID,
+      serviceId: FILAZERO_CONFIG.SERVICE_ID,
+      customer,
+      priority: FILAZERO_CONFIG.DEFAULT_PRIORITY
+    };
+  },
+
+  /**
+   * IDs padrão do sistema
+   */
+  defaults: {
+    providerId: FILAZERO_CONFIG.PROVIDER_ID,
+    locationId: FILAZERO_CONFIG.LOCATION_ID,
+    serviceId: FILAZERO_CONFIG.SERVICE_ID,
+    accessKey: FILAZERO_CONFIG.DEFAULT_ACCESS_KEY
   }
 };

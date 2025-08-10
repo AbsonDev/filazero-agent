@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GroqClient } from './groq-client.js';
 import { MCPClient } from './mcp-client.js';
 import { filazeroTools, generateBrowserUuid } from './function-tools.js';
+import { FILAZERO_CONFIG, getDefaultTicketConfig, getDefaultTerminalConfig } from './config.js';
 import { 
   ChatMessage, 
   ChatSession, 
@@ -176,17 +177,23 @@ export class AgentService {
     const prepared = { ...args };
 
     switch (toolName) {
+      case 'get_terminal':
+        // Usar accessKey padrão se não fornecido
+        if (!prepared.accessKey) {
+          prepared.accessKey = FILAZERO_CONFIG.DEFAULT_ACCESS_KEY;
+        }
+        break;
+        
       case 'create_ticket':
         // Garantir browserUuid
         if (!prepared.browserUuid) {
           prepared.browserUuid = generateBrowserUuid();
         }
         
-        // Garantir priority padrão
-        if (prepared.priority === undefined) {
-          prepared.priority = 0;
-        }
-
+        // Obter configuração padrão e mesclar
+        const defaultConfig = getDefaultTicketConfig();
+        Object.assign(prepared, defaultConfig);
+        
         // ⚠️ VALIDAÇÃO CRÍTICA: Corrigir IDs incorretos se a IA inventou valores
         this.validateAndFixTicketIds(prepared);
         break;
@@ -206,30 +213,31 @@ export class AgentService {
     
     // Se detectar IDs incorretos, aplicar os valores corretos do terminal Filazero
     if (incorrectProviders.includes(args.pid)) {
-      console.log(`🔧 Corrigindo Provider ID ${args.pid} → 11 (Filazero)`);
-      args.pid = 11;
+      console.log(`🔧 Corrigindo Provider ID ${args.pid} → ${FILAZERO_CONFIG.PROVIDER_ID} (Filazero)`);
+      args.pid = FILAZERO_CONFIG.PROVIDER_ID;
     }
     
     if (incorrectLocations.includes(args.locationId)) {
-      console.log(`🔧 Corrigindo Location ID ${args.locationId} → 11 (AGENCIA-001)`);
-      args.locationId = 11;
+      console.log(`🔧 Corrigindo Location ID ${args.locationId} → ${FILAZERO_CONFIG.LOCATION_ID} (AGENCIA-001)`);
+      args.locationId = FILAZERO_CONFIG.LOCATION_ID;
     }
     
     if (incorrectServices.includes(args.serviceId)) {
-      console.log(`🔧 Corrigindo Service ID ${args.serviceId} → 21 (FISIOTERAPIA)`);
-      args.serviceId = 21;
+      console.log(`🔧 Corrigindo Service ID ${args.serviceId} → ${FILAZERO_CONFIG.SERVICE_ID} (FISIOTERAPIA)`);
+      args.serviceId = FILAZERO_CONFIG.SERVICE_ID;
     }
 
     // Corrigir terminalSchedule se contém valores de exemplo
     if (args.terminalSchedule) {
       if (args.terminalSchedule.sessionId === 123) {
-        console.log(`🔧 Corrigindo Session ID 123 → 2056332 (real)`);
-        args.terminalSchedule.sessionId = 2056332;
+        console.log(`🔧 Corrigindo Session ID 123 → ${FILAZERO_CONFIG.DEFAULT_SESSION_ID} (real)`);
+        args.terminalSchedule.sessionId = FILAZERO_CONFIG.DEFAULT_SESSION_ID;
       }
       
-      if (args.terminalSchedule.publicAccessKey === 'ABC123') {
-        console.log(`🔧 Corrigindo Access Key ABC123 → chave real`);
-        args.terminalSchedule.publicAccessKey = '1d1373dcf045408aa3b13914f2ac1076';
+      // Usar accessKey padrão sempre
+      if (args.terminalSchedule.publicAccessKey !== FILAZERO_CONFIG.DEFAULT_ACCESS_KEY) {
+        console.log(`🔧 Corrigindo Access Key para padrão: ${FILAZERO_CONFIG.DEFAULT_ACCESS_KEY}`);
+        args.terminalSchedule.publicAccessKey = FILAZERO_CONFIG.DEFAULT_ACCESS_KEY;
       }
     }
   }
@@ -347,16 +355,16 @@ export class AgentService {
   }
 
   /**
-   * Extrai dados do usuário da mensagem
+   * Extrai dados do usuário da mensagem de forma mais eficiente
    */
   private extractUserDataFromMessage(sessionId: string, message: string) {
     const userData: any = {};
     
-    // Extrair nome (padrões comuns)
+    // Extrair nome (padrões mais abrangentes)
     const namePatterns = [
       /(?:meu nome é|me chamo|sou o?a?)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/i,
-      /para\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*),?\s+(?:telefone|email|fisio|dent)/i,
-      /ticket\s+para\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/i
+      /(?:nome|para)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/i,
+      /(?:quero|gostaria|preciso)\s+(?:de|fazer)\s+(?:um|uma)\s+(?:agendamento|consulta|atendimento)\s+(?:para|com)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/i
     ];
     
     for (const pattern of namePatterns) {
@@ -367,28 +375,38 @@ export class AgentService {
       }
     }
     
-    // Extrair telefone
-    const phonePattern = /(?:telefone|tel|fone|celular|cel)[\s:]*([0-9\s\-\(\)]+)/i;
-    const phoneMatch = message.match(phonePattern);
-    if (phoneMatch && phoneMatch[1]) {
-      userData.phone = phoneMatch[1].replace(/\D/g, '');
+    // Extrair telefone (padrões mais flexíveis)
+    const phonePatterns = [
+      /(?:telefone|tel|fone|celular|cel|whatsapp)[\s:]*([0-9\s\-\(\)]+)/i,
+      /([0-9]{2}[0-9\s\-\(\)]{8,})/i, // DDD + número
+      /(?:meu|o)\s+(?:telefone|celular)\s+(?:é|é\s+o)\s+([0-9\s\-\(\)]+)/i
+    ];
+    
+    for (const pattern of phonePatterns) {
+      const phoneMatch = message.match(pattern);
+      if (phoneMatch && phoneMatch[1]) {
+        userData.phone = phoneMatch[1].replace(/\D/g, '');
+        if (userData.phone.length >= 10) break; // DDD + número
+      }
     }
     
-    // Extrair email
-    const emailPattern = /(?:email|e-mail)[\s:]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i;
-    const emailMatch = message.match(emailPattern);
-    if (emailMatch && emailMatch[1]) {
-      userData.email = emailMatch[1].toLowerCase();
-    }
+    // Extrair email (padrões mais flexíveis)
+    const emailPatterns = [
+      /(?:email|e-mail|e-mail)[\s:]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i,
+      /(?:meu|o)\s+(?:email|e-mail)\s+(?:é|é\s+o)\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i,
+      /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i // Email solto na mensagem
+    ];
     
-    // Extrair serviço preferido
-    const services = ['fisioterapia', 'dentista', 'tomografia', 'acupuntura', 'enfermagem', 'raio-x'];
-    for (const service of services) {
-      if (message.toLowerCase().includes(service)) {
-        userData.preferredService = service.toUpperCase();
+    for (const pattern of emailPatterns) {
+      const emailMatch = message.match(pattern);
+      if (emailMatch && emailMatch[1]) {
+        userData.email = emailMatch[1].toLowerCase();
         break;
       }
     }
+    
+    // NÃO extrair serviço - usar sempre FISIOTERAPIA como padrão
+    // userData.preferredService = 'FISIOTERAPIA';
     
     // Atualizar se encontrou alguma informação
     if (Object.keys(userData).length > 0) {
@@ -404,8 +422,8 @@ export class AgentService {
     switch (toolName) {
       case 'get_terminal':
         if (result && result.provider && result.location) {
-          // Salvar terminal usado como padrão
-          const accessKey = result.publicAccessKey || result.accessKey || '1d1373dcf045408aa3b13914f2ac1076';
+          // Salvar terminal usado como padrão (sempre usar accessKey padrão)
+          const accessKey = FILAZERO_CONFIG.DEFAULT_ACCESS_KEY;
           sessionStore.setDefaultTerminal(sessionId, {
             accessKey,
             providerId: result.provider.id,
@@ -422,7 +440,7 @@ export class AgentService {
             sessionStore.addCreatedTicket(sessionId, {
               id: tickets[0],
               smartCode: result.responseData.smartCode || '',
-              service: 'FISIOTERAPIA' // TODO: Obter do contexto
+              service: FILAZERO_CONFIG.DEFAULT_SERVICE
             });
           }
         }
