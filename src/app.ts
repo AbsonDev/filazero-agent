@@ -72,7 +72,9 @@ app.use('*', (req, res) => {
       'POST /api/chat',
       'GET /api/health',
       'GET /api/stats',
-      'GET /api/sessions'
+      'GET /api/sessions',
+      'GET /api/setup/:id',
+      'POST /api/setup/:id/reset'
     ]
   });
 });

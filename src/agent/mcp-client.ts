@@ -3,6 +3,7 @@
  */
 
 import { MCPRequest, MCPResponse, MCPTool } from '../types/agent.types.js';
+import { FILAZERO_CONFIG } from './config.js';
 
 export class MCPClient {
   private baseUrl: string;
@@ -143,21 +144,35 @@ export class MCPClient {
    */
 
   // Terminal
-  async getTerminal(accessKey: string) {
-    return await this.callTool('get_terminal', { accessKey });
+  async getTerminal(accessKey?: string) {
+    const key = accessKey || FILAZERO_CONFIG.DEFAULT_ACCESS_KEY;
+    return await this.callTool('get_terminal', { accessKey: key });
   }
 
   // Tickets
   async createTicket(params: {
-    terminalSchedule: any;
-    pid: number;
-    locationId: number;
-    serviceId: number;
     customer: { name: string; phone: string; email: string };
-    browserUuid: string;
+    terminalSchedule?: any;
+    pid?: number;
+    locationId?: number;
+    serviceId?: number;
+    browserUuid?: string;
     priority?: number;
   }) {
-    return await this.callTool('create_ticket', params);
+    // Usar valores padrão se não fornecidos
+    const defaultParams = {
+      terminalSchedule: {
+        sessionId: FILAZERO_CONFIG.DEFAULT_SESSION_ID,
+        publicAccessKey: FILAZERO_CONFIG.DEFAULT_ACCESS_KEY
+      },
+      pid: FILAZERO_CONFIG.PROVIDER_ID,
+      locationId: FILAZERO_CONFIG.LOCATION_ID,
+      serviceId: FILAZERO_CONFIG.SERVICE_ID,
+      priority: FILAZERO_CONFIG.DEFAULT_PRIORITY,
+      ...params
+    };
+    
+    return await this.callTool('create_ticket', defaultParams);
   }
 
   async getTicket(id: number) {

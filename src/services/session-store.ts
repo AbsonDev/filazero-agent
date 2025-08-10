@@ -5,7 +5,8 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
-import { ChatSession, AgentContext, FilazeroTicket } from '../types/agent.types.js';
+import { ChatSession, AgentContext, FilazeroTicket, SessionConfiguration, MonitoredServices, SystemInfo, SessionSetupStatus } from '../types/agent.types.js';
+import { FILAZERO_CONFIG } from '../agent/config.js';
 
 // Estrutura estendida para sessão com memória
 export interface EnhancedChatSession extends ChatSession {
@@ -40,6 +41,9 @@ export interface EnhancedChatSession extends ChatSession {
   
   // Última atividade
   lastActivity: Date;
+  
+  // Configuração da sessão (serviços a monitorar, info do sistema, etc.)
+  configuration?: SessionConfiguration;
 }
 
 export class SessionStore {
@@ -137,7 +141,27 @@ export class SessionStore {
         interactionCount: 0,
         createdAt: new Date(),
         updatedAt: new Date(),
-        lastActivity: new Date()
+        lastActivity: new Date(),
+        configuration: {
+          services: {
+            tickets: false,
+            terminals: false,
+            queues: false,
+            providers: false,
+            sessions: false,
+            customers: false,
+            reports: false
+          },
+          systemInfo: {
+            sessionStartTime: new Date()
+          },
+          setupStatus: {
+            isSetupComplete: false,
+            servicesConfigured: false,
+            systemInfoCollected: false,
+            currentStep: 'initial'
+          }
+        }
       };
       
       this.sessions.set(sessionId, newSession);
@@ -229,22 +253,22 @@ export class SessionStore {
 
     // Dados do usuário
     if (session.userData) {
-      const { name, phone, email, preferredService } = session.userData;
+      const { name, phone, email } = session.userData;
       if (name) parts.push(`Nome do usuário: ${name}`);
       if (phone) parts.push(`Telefone: ${phone}`);
       if (email) parts.push(`Email: ${email}`);
-      if (preferredService) parts.push(`Serviço preferido: ${preferredService}`);
+      // Sempre usar serviço padrão
+      parts.push(`Serviço: ${FILAZERO_CONFIG.DEFAULT_SERVICE}`);
     }
 
-    // Terminal padrão
-    if (session.defaultTerminal) {
-      parts.push(`Terminal usado: ${session.defaultTerminal.accessKey}`);
-    }
+    // Terminal padrão (sempre configurado)
+    parts.push(`Terminal padrão configurado (${FILAZERO_CONFIG.TERMINAL.provider} - ${FILAZERO_CONFIG.TERMINAL.location})`);
 
-    // Tickets criados
+    // Tickets criados (usar smartCode quando disponível)
     if (session.ticketsCreated.length > 0) {
       const recent = session.ticketsCreated.slice(-3);
-      parts.push(`Tickets recentes: ${recent.map(t => `#${t.id} (${t.service})`).join(', ')}`);
+      const rendered = recent.map(t => t.smartCode ? `${FILAZERO_CONFIG.DEFAULT_SERVICE} (${t.smartCode})` : FILAZERO_CONFIG.DEFAULT_SERVICE);
+      parts.push(`Atendimentos recentes: ${rendered.join(', ')}`);
     }
 
     // Resumo anterior
@@ -326,6 +350,76 @@ export class SessionStore {
     
     await this.saveSessions();
     console.log('💾 SessionStore: Todas as sessões salvas');
+  }
+
+  /**
+   * Atualiza os serviços monitorados na configuração da sessão
+   */
+  updateMonitoredServices(sessionId: string, services: Partial<MonitoredServices>) {
+    const session = this.getOrCreateSession(sessionId);
+    if (!session.configuration) {
+      session.configuration = {
+        services: {
+          tickets: false,
+          terminals: false,
+          queues: false,
+          providers: false,
+          sessions: false,
+          customers: false,
+          reports: false
+        },
+        systemInfo: { sessionStartTime: new Date() },
+        setupStatus: {
+          isSetupComplete: false,
+          servicesConfigured: false,
+          systemInfoCollected: false,
+          currentStep: 'initial'
+        }
+      };
+    }
+    
+    session.configuration.services = { ...session.configuration.services, ...services };
+    session.configuration.setupStatus.servicesConfigured = true;
+    session.updatedAt = new Date();
+  }
+
+  /**
+   * Atualiza informações do sistema na configuração da sessão
+   */
+  updateSystemInfo(sessionId: string, systemInfo: Partial<SystemInfo>) {
+    const session = this.getOrCreateSession(sessionId);
+    if (!session.configuration) return;
+    
+    session.configuration.systemInfo = { ...session.configuration.systemInfo, ...systemInfo };
+    session.configuration.setupStatus.systemInfoCollected = true;
+    session.updatedAt = new Date();
+  }
+
+  /**
+   * Atualiza o status do setup da sessão
+   */
+  updateSetupStatus(sessionId: string, setupStatus: Partial<SessionSetupStatus>) {
+    const session = this.getOrCreateSession(sessionId);
+    if (!session.configuration) return;
+    
+    session.configuration.setupStatus = { ...session.configuration.setupStatus, ...setupStatus };
+    session.updatedAt = new Date();
+  }
+
+  /**
+   * Verifica se a sessão está configurada
+   */
+  isSessionConfigured(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId);
+    return session?.configuration?.setupStatus.isSetupComplete ?? false;
+  }
+
+  /**
+   * Obtém a configuração da sessão
+   */
+  getSessionConfiguration(sessionId: string): SessionConfiguration | undefined {
+    const session = this.sessions.get(sessionId);
+    return session?.configuration;
   }
 }
 

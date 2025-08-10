@@ -143,3 +143,36 @@ export interface AgentContext {
   lastSearchResults?: any;
   preferences?: Record<string, any>;
 }
+
+// Tipos para setup inicial da sessão
+export interface SessionSetupStatus {
+  isSetupComplete: boolean;
+  servicesConfigured: boolean;
+  systemInfoCollected: boolean;
+  currentStep: 'initial' | 'services' | 'system_info' | 'complete';
+}
+
+export interface MonitoredServices {
+  tickets: boolean;
+  terminals: boolean;
+  queues: boolean;
+  providers: boolean;
+  sessions: boolean;
+  customers: boolean;
+  reports: boolean;
+}
+
+export interface SystemInfo {
+  platform?: string;
+  hostname?: string;
+  username?: string;
+  currentDirectory?: string;
+  sessionStartTime: Date;
+  timezone?: string;
+}
+
+export interface SessionConfiguration {
+  services: MonitoredServices;
+  systemInfo: SystemInfo;
+  setupStatus: SessionSetupStatus;
+}
