@@ -76,13 +76,30 @@ export class AgentService {
 
       // Processar tool calls se houver
       if (groqResponse.toolCalls && groqResponse.toolCalls.length > 0) {
-        console.log(`🛠️ Executando ${groqResponse.toolCalls.length} ferramentas...`);
+        // ⚠️ LIMITE CRÍTICO: Máximo 5 tool calls por vez para evitar loops
+        const maxToolCalls = 5;
+        let filteredToolCalls = groqResponse.toolCalls.slice(0, maxToolCalls);
+        
+        // 🚫 FILTRO ADICIONAL: Detectar loops de get_service 
+        const getServiceCalls = filteredToolCalls.filter(call => call.name === 'get_service');
+        if (getServiceCalls.length > 2) {
+          console.log(`🚫 BLOQUEANDO: ${getServiceCalls.length} chamadas get_service detectadas (possível loop)`);
+          filteredToolCalls = filteredToolCalls.filter(call => call.name !== 'get_service').slice(0, 3);
+        }
+        
+        if (groqResponse.toolCalls.length > filteredToolCalls.length) {
+          console.log(`⚠️ LIMITANDO: ${groqResponse.toolCalls.length} → ${filteredToolCalls.length} tool calls (evitando loop)`);
+        }
+        
+        const limitedToolCalls = filteredToolCalls;
+        
+        console.log(`🛠️ Executando ${limitedToolCalls.length} ferramentas...`);
 
-        // Adicionar mensagem do assistente com tool calls
+        // Adicionar mensagem do assistente com tool calls (limitado)
         const assistantMessage: GroqMessage = {
           role: 'assistant',
           content: null,
-          tool_calls: groqResponse.toolCalls.map(call => ({
+          tool_calls: limitedToolCalls.map(call => ({
             id: call.id,
             type: 'function',
             function: {
@@ -93,8 +110,8 @@ export class AgentService {
         };
         groqMessages.push(assistantMessage);
 
-        // Executar cada ferramenta
-        for (const toolCall of groqResponse.toolCalls) {
+        // Executar cada ferramenta (limitado)
+        for (const toolCall of limitedToolCalls) {
           try {
             console.log(`🔧 Executando: ${toolCall.name}`);
             

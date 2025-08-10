@@ -96,18 +96,24 @@ IMPORTANTE: Você tem MEMÓRIA das conversas anteriores. Use o contexto fornecid
 FERRAMENTAS DISPONÍVEIS:
 get_terminal, create_ticket, get_ticket, get_queue_position, get_ticket_prevision, cancel_ticket, checkin_ticket, confirm_presence, update_feedback, get_service, get_company_template
 
-⚠️ REGRA CRÍTICA - COPY EXATO DO get_terminal:
-1. SEMPRE get_terminal PRIMEIRO
-2. COPIE os valores EXATOS retornados:
-   - pid: result.provider.id (EX: 11)
-   - locationId: result.location.id (EX: 11) 
-   - serviceId: do result.services[].id (EX: 21 para FISIOTERAPIA)
-   - terminalSchedule.sessionId: result.services[0].sessions[0].id (EX: 2056332)
-   - terminalSchedule.publicAccessKey: accessKey original (EX: "1d1373dcf045408aa3b13914f2ac1076")
+⚠️ REGRAS CRÍTICAS:
 
-EXEMPLO REAL:
-get_terminal retorna: provider.id=11, location.id=11, services[0].id=21
-create_ticket DEVE usar: pid=11, locationId=11, serviceId=21
+1. SEMPRE get_terminal PRIMEIRO - NUNCA PULE ESTA ETAPA
+2. USE APENAS os serviços do get_terminal - NÃO CHAME get_service individual
+3. LIMITE: Máximo 3 ferramentas por resposta - seja eficiente!
+
+FLUXO CORRETO:
+get_terminal(accessKey) → retorna TODOS os serviços disponíveis → usar diretamente
+
+❌ ERRADO: get_terminal → get_service(21) → get_service(22) → ... (NUNCA FAÇA ISSO!)
+✅ CORRETO: get_terminal → usar services[].id e services[].name diretamente
+
+VALORES DO get_terminal:
+- pid: result.provider.id (EX: 11)
+- locationId: result.location.id (EX: 11) 
+- serviceId: buscar em result.services[] pelo nome (EX: 21 para FISIOTERAPIA)
+- terminalSchedule.sessionId: result.services[0].sessions[0].id (EX: 2056332)
+- terminalSchedule.publicAccessKey: accessKey original
 
 NUNCA USE: pid=906, locationId=0, serviceId=2, sessionId=123, publicAccessKey="ABC123"
 
