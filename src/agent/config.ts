@@ -5,7 +5,7 @@
 
 export const FILAZERO_CONFIG = {
   // Access Key padrão do sistema
-  DEFAULT_ACCESS_KEY: 'd6779a60360d455b9af96c1b68e066c5',
+  DEFAULT_ACCESS_KEY: '1d1373dcf045408aa3b13914f2ac1076',
   
   // ⚠️ IDs são dinâmicos - obtidos via get_terminal
   // NÃO use IDs fixos - sempre consulte get_terminal primeiro!

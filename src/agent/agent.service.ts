@@ -133,7 +133,7 @@ export class AgentService {
               toolResult = await this.executeLocalTool(sessionId, toolCall.name, toolCall.arguments);
             } else {
               // Preparar argumentos com valores padrão se necessário
-              const args = this.prepareToolArguments(toolCall.name, toolCall.arguments);
+              const args = this.prepareToolArguments(toolCall.name, toolCall.arguments, context);
               
               // Chamar ferramenta MCP
               toolResult = await this.mcpClient.callTool(toolCall.name, args);
@@ -207,7 +207,7 @@ export class AgentService {
   /**
    * Prepara argumentos da ferramenta com valores padrão
    */
-  private prepareToolArguments(toolName: string, args: Record<string, any>): Record<string, any> {
+  private prepareToolArguments(toolName: string, args: Record<string, any>, context?: AgentContext): Record<string, any> {
     const prepared = { ...args };
 
     switch (toolName) {
@@ -224,12 +224,70 @@ export class AgentService {
           prepared.browserUuid = generateBrowserUuid();
         }
         
-        // Obter configuração padrão e mesclar
-        const defaultConfig = getDefaultTicketConfig();
-        Object.assign(prepared, defaultConfig);
+        // 🚨 CRÍTICO: Usar dados reais do terminal obtidos via get_terminal
+        if (context?.currentTerminal) {
+          const terminalData = context.currentTerminal;
+          console.log('🔧 Usando dados reais do terminal:', {
+            providerId: terminalData.provider?.id,
+            locationId: terminalData.location?.id,
+            terminalId: terminalData.id
+          });
+          
+          // Extrair IDs corretos do terminal
+          prepared.pid = terminalData.provider?.id || terminalData.id;
+          prepared.locationId = terminalData.location?.id || terminalData.id;
+          
+          // Mapear serviço escolhido pelo usuário
+          const serviceName = prepared.serviceType || 'ACUPUNTURA';
+          const service = this.findServiceByName(terminalData, serviceName);
+          if (service) {
+            prepared.serviceId = service.id;
+            console.log(`🎯 Serviço encontrado: ${serviceName} → ID ${service.id}`);
+            
+            // Usar primeira sessão disponível
+            if (service.sessions && service.sessions.length > 0) {
+              const session = service.sessions[0];
+              prepared.terminalSchedule = {
+                sessionId: session.id,
+                publicAccessKey: FILAZERO_CONFIG.DEFAULT_ACCESS_KEY
+              };
+              console.log(`🕐 Sessão encontrada: ID ${session.id}`);
+            }
+          } else {
+            console.error(`❌ Serviço "${serviceName}" não encontrado no terminal`);
+            // Usar primeiro serviço disponível como fallback
+            if (terminalData.services && terminalData.services.length > 0) {
+              const firstService = terminalData.services[0];
+              prepared.serviceId = firstService.id;
+              console.log(`🔄 Usando primeiro serviço como fallback: ${firstService.name} (ID ${firstService.id})`);
+              
+              if (firstService.sessions && firstService.sessions.length > 0) {
+                prepared.terminalSchedule = {
+                  sessionId: firstService.sessions[0].id,
+                  publicAccessKey: FILAZERO_CONFIG.DEFAULT_ACCESS_KEY
+                };
+              }
+            }
+          }
+        } else {
+          console.error('❌ Dados do terminal não encontrados no contexto!');
+          // Fallback para valores padrão (ainda vão dar erro, mas pelo menos tentamos)
+          const defaultConfig = getDefaultTicketConfig();
+          Object.assign(prepared, defaultConfig);
+        }
         
-        // ⚠️ VALIDAÇÃO CRÍTICA: Corrigir IDs incorretos se a IA inventou valores
-        this.validateAndFixTicketIds(prepared);
+        // Garantir prioridade padrão
+        if (!prepared.priority) {
+          prepared.priority = FILAZERO_CONFIG.DEFAULT_PRIORITY;
+        }
+        
+        console.log('🎫 Argumentos finais do create_ticket:', {
+          pid: prepared.pid,
+          locationId: prepared.locationId,
+          serviceId: prepared.serviceId,
+          sessionId: prepared.terminalSchedule?.sessionId,
+          customer: prepared.customer
+        });
         break;
     }
 
@@ -274,6 +332,50 @@ export class AgentService {
         args.terminalSchedule.publicAccessKey = FILAZERO_CONFIG.DEFAULT_ACCESS_KEY;
       }
     }
+  }
+
+  /**
+   * Encontra um serviço pelo nome no terminal
+   */
+  private findServiceByName(terminalData: any, serviceName: string): any {
+    if (!terminalData.services || !Array.isArray(terminalData.services)) {
+      return null;
+    }
+    
+    // Normalizar nome do serviço para busca
+    const normalizedName = serviceName.toUpperCase().trim();
+    
+    // Mapeamento de nomes comuns para nomes do sistema
+    const serviceMapping: Record<string, string[]> = {
+      'ACUPUNTURA': ['ACUPUNTURA', 'ACUPUNCTURA'],
+      'FISIOTERAPIA': ['FISIOTERAPIA', 'FISIO'],
+      'CONSULTA': ['CONSULTA', 'CONSULTA MÉDICA', 'MEDICA'],
+      'OFTALMOLOGIA': ['OFTALMOLOGIA', 'OFTALMO'],
+      'CARDIOLOGIA': ['CARDIOLOGIA', 'CARDIO'],
+      'PEDIATRIA': ['PEDIATRIA', 'PEDI'],
+      'GINECOLOGIA': ['GINECOLOGIA', 'GINE']
+    };
+    
+    // Buscar por nome exato primeiro
+    for (const service of terminalData.services) {
+      if (service.name && service.name.toUpperCase().includes(normalizedName)) {
+        return service;
+      }
+    }
+    
+    // Buscar usando mapeamento
+    for (const [key, aliases] of Object.entries(serviceMapping)) {
+      if (aliases.includes(normalizedName)) {
+        for (const service of terminalData.services) {
+          if (service.name && service.name.toUpperCase().includes(key)) {
+            return service;
+          }
+        }
+      }
+    }
+    
+    // Se não encontrou, retornar null
+    return null;
   }
 
   /**
