@@ -90,8 +90,8 @@ export class GroqClient {
 IMPORTANTE - CONHECIMENTO DO SISTEMA:
 - Você tem acesso ao sistema MCP Filazero através das ferramentas disponíveis
 - Use SEMPRE o accessKey padrão: d6779a60360d455b9af96c1b68e066c5
-- O sistema já tem configurações padrão: Provider ID 11 (Filazero), Location ID 11 (AGENCIA-001), Service ID 21 (FISIOTERAPIA)
-- NÃO pergunte horários, serviços ou localizações - use os valores padrão automaticamente
+- NUNCA use IDs fixos - SEMPRE obtenha IDs através da ferramenta get_terminal
+- NÃO pergunte horários, serviços ou localizações - use os valores do terminal automaticamente
 
 OBJETIVO PRINCIPAL:
 Coletar APENAS 3 informações essenciais do cliente:
@@ -111,11 +111,11 @@ get_terminal(accessKey) → retorna TODOS os serviços disponíveis → usar dir
 ✅ CORRETO: get_terminal → usar services[].id e services[].name diretamente
 
 VALORES DO get_terminal PARA create_ticket:
-- pid: result.provider.id (EX: 11)
-- locationId: result.location.id (EX: 11) 
-- serviceId: buscar em result.services[] pelo nome (EX: 21 para FISIOTERAPIA)
-- terminalSchedule.sessionId: result.services[0].sessions[0].id (EX: 2056332)
-- terminalSchedule.publicAccessKey: accessKey original
+- pid: result.provider.id (EX: 1043)
+- locationId: result.location.id (EX: 1483) 
+- serviceId: result.services[0].id (use primeiro serviço, EX: 3606 para CONSULTA)
+- terminalSchedule.sessionId: result.services[0].sessions[0].id (EX: 2056955)
+- terminalSchedule.publicAccessKey: accessKey original (d6779a60360d455b9af96c1b68e066c5)
 
 FLUXO DE AGENDAMENTO:
 1. get_terminal primeiro para obter configurações

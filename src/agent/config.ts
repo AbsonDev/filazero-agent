@@ -7,29 +7,30 @@ export const FILAZERO_CONFIG = {
   // Access Key padrão do sistema
   DEFAULT_ACCESS_KEY: 'd6779a60360d455b9af96c1b68e066c5',
   
-  // IDs padrão do sistema
-  PROVIDER_ID: 11, // Filazero
-  LOCATION_ID: 11, // AGENCIA-001
-  SERVICE_ID: 21, // FISIOTERAPIA
+  // ⚠️ IDs são dinâmicos - obtidos via get_terminal
+  // NÃO use IDs fixos - sempre consulte get_terminal primeiro!
   
-  // Sessão padrão do terminal
-  DEFAULT_SESSION_ID: 2056332,
+  // Compatibilidade temporária - valores placeholder
+  PROVIDER_ID: 0, // ⚠️ DINÂMICO - use get_terminal
+  LOCATION_ID: 0, // ⚠️ DINÂMICO - use get_terminal  
+  SERVICE_ID: 0, // ⚠️ DINÂMICO - use get_terminal
+  DEFAULT_SESSION_ID: 0, // ⚠️ DINÂMICO - use get_terminal
   
-    // Prioridade padrão dos tickets
+  // Prioridade padrão dos tickets
   DEFAULT_PRIORITY: 0,
 
   // UUID padrão do navegador
   DEFAULT_BROWSER_UUID: '00000000-0000-0000-0000-000000000000',
 
-  // Serviço padrão
-  DEFAULT_SERVICE: 'FISIOTERAPIA',
+  // Serviço padrão (nome genérico - ID será obtido dinamicamente)
+  DEFAULT_SERVICE: 'CONSULTA',
   
-  // Configurações do terminal
+  // Configurações do terminal (placeholder)
   TERMINAL: {
-    name: 'Filazero - AGENCIA-001',
-    provider: 'Filazero',
-    location: 'AGENCIA-001',
-    service: 'FISIOTERAPIA'
+    name: 'Dinâmico via get_terminal',
+    provider: 'Dinâmico via get_terminal',
+    location: 'Dinâmico via get_terminal',
+    service: 'Dinâmico via get_terminal'
   },
   
   // Mensagens padrão
@@ -52,7 +53,7 @@ export function isValidAccessKey(accessKey: string): boolean {
 }
 
 /**
- * Obtém configuração padrão para tickets
+ * Obtém configuração padrão para tickets (compatibilidade)
  */
 export function getDefaultTicketConfig() {
   return {
@@ -63,6 +64,28 @@ export function getDefaultTicketConfig() {
     pid: FILAZERO_CONFIG.PROVIDER_ID,
     locationId: FILAZERO_CONFIG.LOCATION_ID,
     serviceId: FILAZERO_CONFIG.SERVICE_ID,
+    priority: FILAZERO_CONFIG.DEFAULT_PRIORITY
+  };
+}
+
+/**
+ * Cria configuração de ticket usando dados do terminal
+ * @param terminalData - Dados retornados por get_terminal
+ * @param serviceIndex - Índice do serviço (padrão: 0 para primeiro serviço)
+ */
+export function createTicketConfigFromTerminal(terminalData: any, serviceIndex: number = 0) {
+  const terminal = JSON.parse(terminalData);
+  const service = terminal.services[serviceIndex];
+  const session = service.sessions[0];
+
+  return {
+    terminalSchedule: {
+      sessionId: session.id,
+      publicAccessKey: FILAZERO_CONFIG.DEFAULT_ACCESS_KEY
+    },
+    pid: terminal.provider.id,
+    locationId: terminal.location.id,
+    serviceId: service.id,
     priority: FILAZERO_CONFIG.DEFAULT_PRIORITY
   };
 }
